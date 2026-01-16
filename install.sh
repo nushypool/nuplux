@@ -455,6 +455,41 @@ fi
 $AUTO_END
 EOF
 
+# ---- Friendly final message + optional start
+# Colors (auto-disable when not a TTY)
+if [ -t 1 ]; then
+  C_CYAN=$'\033[36m'
+  C_GREEN=$'\033[32m'
+  C_BOLD=$'\033[1m'
+  C_RESET=$'\033[0m'
+else
+  C_CYAN=""; C_GREEN=""; C_BOLD=""; C_RESET=""
+fi
+
+cyan()  { info "${C_CYAN}${C_BOLD}$*${C_RESET}"; }
+green() { info "${C_GREEN}$*${C_RESET}"; }
+
+# ---- Friendly final message + optional start
+info ""
+cyan "                Nuplux is ready to use! 🎉"
+cyan "****************************************************************"
+info ""
+
+info "Nuplux turns tmux into a Byobu-like workspace:"
+info "  • modern status bar (updates, CPU/RAM, net speed, time)"
+info "  • clipboard helpers (WSL + OSC52 for SSH)"
+info "  • persistent session: you can close the terminal and keep working later"
+info ""
+info "Where things live:"
+info "  • Config:  $TMUX_CONF"
+info "  • Home:    $CONF_DIR"
+info ""
+green "Next steps:"
+green "  • Start now:         nuplux"
+green "  • Enable autostart:  nuplux-enable"
+green "  • Disable autostart: nuplux-disable"
+info ""
+
 # ---- Optional: reload .bashrc (prompt)
 if [ -t 0 ]; then
   read -r -p "Reload ~/.bashrc now? [Y/n] " _ans
@@ -475,10 +510,19 @@ else
   fi
 fi
 
-# ---- Minimal final instructions
-info ""
-info "Installed nuplux."
-info "Config: $TMUX_CONF"
-info "Enable autostart: nuplux-enable"
-info "Disable autostart: nuplux-disable"
-info "Start manually: nuplux"
+# Ask to start nuplux now (interactive only)
+if [ -t 0 ] && [ -t 1 ]; then
+  read -r -p "Start Nuplux now? [Y/n] " _start
+  _start="${_start:-Y}"
+  if [[ "$_start" =~ ^[Yy]$ ]]; then
+    if [ -n "${TMUX:-}" ]; then
+      tmux source-file "$TMUX_CONF"
+      tmux display-message "Reloaded: $TMUX_CONF"
+    else
+      "$LOCAL_BIN/nuplux"
+    fi
+  else
+    info "No problem — you can run 'nuplux' anytime."
+  fi
+fi
+
