@@ -22,12 +22,11 @@ curl -fsSL https://raw.githubusercontent.com/nushypool/nuplux/main/install.sh | 
 
 ## Where it installs things
 
-Everything lives here (no `~/.tmux.conf`, no `~/.tmux/`):
+Everything lives here:
 
 - `~/.config/nuplux/`
   - `tmux.conf`
   - `scripts/` (status + clipboard helpers)
-  - `plugins/` (TPM)
 - `~/.local/bin/`
   - `nuplux`
   - `nuplux-enable`
@@ -58,27 +57,6 @@ From the next terminal login/open, Nuplux auto-attaches to the persistent sessio
 ```bash
 nuplux-disable
 ```
-
-### Reload config (when already inside tmux)
-
-```bash
-tmux source-file ~/.config/nuplux/tmux.conf
-```
-
----
-
-## Plugins (TPM)
-
-TPM is installed under `~/.config/nuplux/plugins/tpm`.
-
-Inside tmux:
-
-- Install plugins: `Ctrl+b` then `I`
-- Update plugins:  `Ctrl+b` then `U`
-- Remove plugins:  `Ctrl+b` then `Alt+u`
-
-If `Ctrl+b` + `I` doesn’t work, check that the config includes:
-`run "~/.config/nuplux/plugins/tpm/tpm"`
 
 ---
 
@@ -125,18 +103,10 @@ Copy mode (vi):
 - `Ctrl+C` — copy selection (copy-mode only)
 
 ### Misc
-- `F5` — Reload Nuplux tmux config
+- `F5` — Reload config
 - `F12` — Lock tmux
 
 ---
 
 ## Uninstall
-
-1) Remove the managed block from `~/.bashrc` (between):
-- `# >>> nuplux autostart >>>`
-- `# <<< nuplux autostart <<<`
-
-2) Remove:
-- `~/.config/nuplux/`
-- `~/.local/bin/nuplux*`
-- `~/.cache/nuplux/`
+- rm -rf ~/.config/nuplux/ && rm -rf ~/.local/bin/nuplux* && rm -rf ~/.cache/nuplux/

@@ -1,0 +1,115 @@
+# Nuplux tmux configuration (generated)
+# DO NOT EDIT ~/.config/nuplux/tmux.conf directly.
+# Edit: ~/.config/nuplux/theme.conf
+
+set -g default-terminal "screen-256color"
+set -g history-limit 50000
+
+# Enable mouse only in WSL (PowerShell available); disable on remote SSH for reliable client-side paste.
+if-shell -b 'command -v powershell.exe >/dev/null 2>&1' 'set -g mouse on' 'set -g mouse off'
+
+# Helps with timing/escape parsing and avoids stray terminal replies on some clients.
+set -sg escape-time 50
+set -g detach-on-destroy off
+
+# Border lines: single (avoid double-line gap)
+run-shell -b 'tmux set-option -g pane-border-lines single 2>/dev/null || true'
+
+# Byobu-like "thicker" borders (optical): fg + bg
+set -g pane-border-style fg=@NUX_PANE_BORDER_FG@,bg=@NUX_PANE_BORDER_BG@
+set -g pane-active-border-style fg=@NUX_PANE_ACTIVE_BORDER_FG@,bg=@NUX_PANE_ACTIVE_BORDER_BG@
+
+# Paste bindings only when Windows clipboard is available (WSL)
+if-shell -b 'command -v powershell.exe >/dev/null 2>&1' \
+  'unbind -n MouseDown3Pane; bind-key -n MouseDown3Pane run-shell -b "~/.config/nuplux/scripts/win-paste.sh | tmux load-buffer - && tmux paste-buffer"' \
+  'unbind -n MouseDown3Pane'
+
+if-shell -b 'command -v powershell.exe >/dev/null 2>&1' \
+  'bind-key -n C-v run-shell -b "~/.config/nuplux/scripts/win-paste.sh | tmux load-buffer - && tmux paste-buffer"; bind-key -n S-Insert run-shell -b "~/.config/nuplux/scripts/win-paste.sh | tmux load-buffer - && tmux paste-buffer"' \
+  'unbind -n C-v; unbind -n S-Insert'
+
+# Status bar
+set -g status on
+set -g status-position bottom
+set -g status-interval 2
+run-shell -b "~/.config/nuplux/scripts/apt-updates.sh >/dev/null 2>&1 || true"
+
+set -g status-style bg=@NUX_STATUS_BG@,fg=@NUX_STATUS_FG@
+set -g status-left-length 30
+set -g status-right-length 250
+
+set -g status-left "#[fg=@NUX_LEFT_HOST_FG@,bg=@NUX_LEFT_HOST_BG@,bold] #h #[fg=@NUX_LEFT_HOST_BG@,bg=@NUX_LEFT_SESS_BG@]#[fg=@NUX_LEFT_SESS_FG@,bg=@NUX_LEFT_SESS_BG@] #S #[fg=@NUX_LEFT_SESS_BG@,bg=@NUX_STATUS_BG@]"
+
+set -g status-right "#[fg=@NUX_RIGHT_APT_FG@,bg=@NUX_RIGHT_APT_BG@] APT:#(~/.config/nuplux/scripts/apt-updates.sh) #[fg=@NUX_RIGHT_UP_FG@,bg=@NUX_RIGHT_UP_BG@] Up:#(~/.config/nuplux/scripts/uptime.sh) #[fg=@NUX_RIGHT_SYS_FG@,bg=@NUX_RIGHT_SYS_BG@] CPU:#(~/.config/nuplux/scripts/cpu_percentage.sh) RAM:#(~/.config/nuplux/scripts/ram_percentage.sh) #[fg=@NUX_RIGHT_LOAD_FG@,bg=@NUX_RIGHT_LOAD_BG@] Load:#(cat /proc/loadavg|awk '{print $1}') #[fg=@NUX_RIGHT_DISK_FG@,bg=@NUX_RIGHT_DISK_BG@] Disk:#(~/.config/nuplux/scripts/disk.sh) #[fg=@NUX_RIGHT_BAT_FG@,bg=@NUX_RIGHT_BAT_BG@] #(~/.config/nuplux/scripts/battery.sh) #[fg=@NUX_RIGHT_NET_FG@,bg=@NUX_RIGHT_NET_BG@] Net:#(~/.config/nuplux/scripts/netspeed.sh) #[fg=@NUX_RIGHT_DATE_FG@,bg=@NUX_RIGHT_DATE_BG@] %d-%b #[fg=@NUX_RIGHT_TIME_FG@,bg=@NUX_RIGHT_TIME_BG@,bold] %H:%M:%S "
+
+# Tabs
+setw -g window-status-separator ""
+setw -g window-status-format "#[fg=@NUX_TAB_FG@,bg=@NUX_TAB_BG@] #I:#W#F "
+setw -g window-status-current-format "#[fg=@NUX_TAB_BG@,bg=@NUX_TAB_ACTIVE_BG@]#[fg=@NUX_TAB_ACTIVE_FG@,bg=@NUX_TAB_ACTIVE_BG@] #I:#W#F #[fg=@NUX_TAB_ACTIVE_EDGE_FG@,bg=@NUX_TAB_BG@]"
+
+# Indices
+set -g base-index 1
+setw -g pane-base-index 1
+set -g renumber-windows on
+
+# Messages
+set -g message-style bg=@NUX_MSG_BG@,fg=@NUX_MSG_FG@,bold
+
+# ===================== KEYBINDINGS =====================
+
+bind-key -n F2 new-window -c "#{pane_current_path}"
+bind-key -n F3 previous-window
+bind-key -n F4 next-window
+bind-key -n F5 source-file "~/.config/nuplux/tmux.conf" \; display-message "Reloaded!"
+bind-key -n F6 detach-client
+bind-key -n S-F6 detach-client
+bind-key -n F7 copy-mode
+bind-key -n F8 command-prompt -p "(rename '#W')" "rename-window '%%'"
+bind-key -n F12 lock-client
+
+bind-key -n S-F2 split-window -v -c "#{pane_current_path}"
+bind-key -n C-F2 split-window -h -c "#{pane_current_path}"
+bind-key -n S-F3 select-pane -t :.-
+bind-key -n S-F4 select-pane -t :.+
+bind-key -n S-F5 kill-pane -a
+bind-key -n C-F6 kill-pane
+bind-key -n C-F5 run-shell -b "~/.config/nuplux/scripts/reconnect-agents.sh"
+
+bind -n M-PageUp   copy-mode -e \; send -X page-up
+bind -n M-PageDown copy-mode -e \; send -X page-down
+bind -n M-Up       copy-mode -e \; send -X cursor-up
+bind -n M-Down     copy-mode -e \; send -X cursor-down
+
+bind-key -n S-Left  select-pane -L
+bind-key -n S-Right select-pane -R
+bind-key -n S-Up    select-pane -U
+bind-key -n S-Down  select-pane -D
+
+# Smaller resize steps
+bind-key -n M-S-Left  resize-pane -L 2
+bind-key -n M-S-Right resize-pane -R 2
+bind-key -n M-S-Up    resize-pane -U 1
+bind-key -n M-S-Down  resize-pane -D 1
+
+# Copy mode (VI)
+setw -g mode-keys vi
+bind-key -T copy-mode-vi 'v' send -X begin-selection
+bind-key -T copy-mode-vi 'y' send -X copy-pipe-and-cancel "~/.config/nuplux/scripts/copy-to-clipboard.sh"
+bind-key -T copy-mode-vi Enter send -X copy-pipe-and-cancel "~/.config/nuplux/scripts/copy-to-clipboard.sh"
+bind-key -T copy-mode-vi MouseDragEnd1Pane send -X copy-pipe-and-cancel "~/.config/nuplux/scripts/copy-to-clipboard.sh"
+
+# Ctrl+C: copy only in copy-mode; normal Ctrl+C otherwise
+bind-key -T copy-mode-vi C-c send-keys -X copy-pipe-and-cancel "~/.config/nuplux/scripts/copy-to-clipboard.sh"
+bind-key -T copy-mode    C-c send-keys -X copy-pipe-and-cancel "~/.config/nuplux/scripts/copy-to-clipboard.sh"
+
+# OSC52 clipboard support
+set -g set-clipboard on
+set -ga terminal-overrides ',*:Ms=\E]52;c;%p2%s\007'
+
+bind | split-window -h -c "#{pane_current_path}"
+bind - split-window -v -c "#{pane_current_path}"
+
+# CPU plugin colors (named)
+set -g @cpu_low_fg_color "@NUX_CPU_LOW@"
+set -g @cpu_medium_fg_color "@NUX_CPU_MED@"
+set -g @cpu_high_fg_color "@NUX_CPU_HIGH@"

@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+set -e
+
+APP_NAME="nuplux"
+CONF_DIR="$HOME/.config/$APP_NAME"
+THEME_FILE="$CONF_DIR/theme.conf"
+TMUX_TEMPLATE="$CONF_DIR/tmux.conf.template"
+TMUX_CONF="$CONF_DIR/tmux.conf"
+TMUX_SESSION="main"
+
+# Load theme
+if [ -f "$THEME_FILE" ]; then
+  # shellcheck disable=SC1090
+  . "$THEME_FILE"
+fi
+
+# Defaults (if someone deletes vars)
+: "${NUX_PANE_BORDER_FG:=colour39}"
+: "${NUX_PANE_BORDER_BG:=colour17}"
+: "${NUX_PANE_ACTIVE_BORDER_FG:=colour39}"
+: "${NUX_PANE_ACTIVE_BORDER_BG:=colour19}"
+: "${NUX_STATUS_BG:=colour235}"
+: "${NUX_STATUS_FG:=colour250}"
+: "${NUX_LEFT_HOST_BG:=colour254}"
+: "${NUX_LEFT_HOST_FG:=colour16}"
+: "${NUX_LEFT_SESS_BG:=colour240}"
+: "${NUX_LEFT_SESS_FG:=colour231}"
+: "${NUX_TAB_BG:=colour235}"
+: "${NUX_TAB_FG:=colour244}"
+: "${NUX_TAB_ACTIVE_BG:=colour31}"
+: "${NUX_TAB_ACTIVE_FG:=colour117}"
+: "${NUX_TAB_ACTIVE_EDGE_FG:=colour31}"
+: "${NUX_RIGHT_APT_BG:=colour236}"
+: "${NUX_RIGHT_APT_FG:=colour247}"
+: "${NUX_RIGHT_UP_BG:=colour237}"
+: "${NUX_RIGHT_UP_FG:=colour248}"
+: "${NUX_RIGHT_SYS_BG:=colour239}"
+: "${NUX_RIGHT_SYS_FG:=colour250}"
+: "${NUX_RIGHT_LOAD_BG:=colour240}"
+: "${NUX_RIGHT_LOAD_FG:=colour231}"
+: "${NUX_RIGHT_DISK_BG:=colour241}"
+: "${NUX_RIGHT_DISK_FG:=colour231}"
+: "${NUX_RIGHT_BAT_BG:=colour242}"
+: "${NUX_RIGHT_BAT_FG:=colour231}"
+: "${NUX_RIGHT_NET_BG:=colour33}"
+: "${NUX_RIGHT_NET_FG:=colour231}"
+: "${NUX_RIGHT_DATE_BG:=colour254}"
+: "${NUX_RIGHT_DATE_FG:=colour16}"
+: "${NUX_RIGHT_TIME_BG:=colour231}"
+: "${NUX_RIGHT_TIME_FG:=colour16}"
+: "${NUX_MSG_BG:=colour31}"
+: "${NUX_MSG_FG:=colour231}"
+: "${NUX_CPU_LOW:=#[fg=green]}"
+: "${NUX_CPU_MED:=#[fg=yellow]}"
+: "${NUX_CPU_HIGH:=#[fg=red]}"
+
+render() {
+  sed \
+    -e "s|@NUX_PANE_BORDER_FG@|${NUX_PANE_BORDER_FG}|g" \
+    -e "s|@NUX_PANE_BORDER_BG@|${NUX_PANE_BORDER_BG}|g" \
+    -e "s|@NUX_PANE_ACTIVE_BORDER_FG@|${NUX_PANE_ACTIVE_BORDER_FG}|g" \
+    -e "s|@NUX_PANE_ACTIVE_BORDER_BG@|${NUX_PANE_ACTIVE_BORDER_BG}|g" \
+    -e "s|@NUX_STATUS_BG@|${NUX_STATUS_BG}|g" \
+    -e "s|@NUX_STATUS_FG@|${NUX_STATUS_FG}|g" \
+    -e "s|@NUX_LEFT_HOST_BG@|${NUX_LEFT_HOST_BG}|g" \
+    -e "s|@NUX_LEFT_HOST_FG@|${NUX_LEFT_HOST_FG}|g" \
+    -e "s|@NUX_LEFT_SESS_BG@|${NUX_LEFT_SESS_BG}|g" \
+    -e "s|@NUX_LEFT_SESS_FG@|${NUX_LEFT_SESS_FG}|g" \
+    -e "s|@NUX_TAB_BG@|${NUX_TAB_BG}|g" \
+    -e "s|@NUX_TAB_FG@|${NUX_TAB_FG}|g" \
+    -e "s|@NUX_TAB_ACTIVE_BG@|${NUX_TAB_ACTIVE_BG}|g" \
+    -e "s|@NUX_TAB_ACTIVE_FG@|${NUX_TAB_ACTIVE_FG}|g" \
+    -e "s|@NUX_TAB_ACTIVE_EDGE_FG@|${NUX_TAB_ACTIVE_EDGE_FG}|g" \
+    -e "s|@NUX_RIGHT_APT_BG@|${NUX_RIGHT_APT_BG}|g" \
+    -e "s|@NUX_RIGHT_APT_FG@|${NUX_RIGHT_APT_FG}|g" \
+    -e "s|@NUX_RIGHT_UP_BG@|${NUX_RIGHT_UP_BG}|g" \
+    -e "s|@NUX_RIGHT_UP_FG@|${NUX_RIGHT_UP_FG}|g" \
+    -e "s|@NUX_RIGHT_SYS_BG@|${NUX_RIGHT_SYS_BG}|g" \
+    -e "s|@NUX_RIGHT_SYS_FG@|${NUX_RIGHT_SYS_FG}|g" \
+    -e "s|@NUX_RIGHT_LOAD_BG@|${NUX_RIGHT_LOAD_BG}|g" \
+    -e "s|@NUX_RIGHT_LOAD_FG@|${NUX_RIGHT_LOAD_FG}|g" \
+    -e "s|@NUX_RIGHT_DISK_BG@|${NUX_RIGHT_DISK_BG}|g" \
+    -e "s|@NUX_RIGHT_DISK_FG@|${NUX_RIGHT_DISK_FG}|g" \
+    -e "s|@NUX_RIGHT_BAT_BG@|${NUX_RIGHT_BAT_BG}|g" \
+    -e "s|@NUX_RIGHT_BAT_FG@|${NUX_RIGHT_BAT_FG}|g" \
+    -e "s|@NUX_RIGHT_NET_BG@|${NUX_RIGHT_NET_BG}|g" \
+    -e "s|@NUX_RIGHT_NET_FG@|${NUX_RIGHT_NET_FG}|g" \
+    -e "s|@NUX_RIGHT_DATE_BG@|${NUX_RIGHT_DATE_BG}|g" \
+    -e "s|@NUX_RIGHT_DATE_FG@|${NUX_RIGHT_DATE_FG}|g" \
+    -e "s|@NUX_RIGHT_TIME_BG@|${NUX_RIGHT_TIME_BG}|g" \
+    -e "s|@NUX_RIGHT_TIME_FG@|${NUX_RIGHT_TIME_FG}|g" \
+    -e "s|@NUX_MSG_BG@|${NUX_MSG_BG}|g" \
+    -e "s|@NUX_MSG_FG@|${NUX_MSG_FG}|g" \
+    -e "s|@NUX_CPU_LOW@|${NUX_CPU_LOW}|g" \
+    -e "s|@NUX_CPU_MED@|${NUX_CPU_MED}|g" \
+    -e "s|@NUX_CPU_HIGH@|${NUX_CPU_HIGH}|g"
+}
+
+if [ -f "$TMUX_TEMPLATE" ]; then
+  render < "$TMUX_TEMPLATE" > "$TMUX_CONF"
+fi
+
+exec tmux -f "$TMUX_CONF" new-session -A -s "$TMUX_SESSION"

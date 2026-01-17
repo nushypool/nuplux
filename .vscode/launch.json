@@ -1,0 +1,20 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"type": "bashdb",
+			"request": "launch",
+			"name": "Bash-Debug Install Script",
+			"program": "${workspaceFolder}/install.sh",
+			"cwd": "${workspaceFolder}",
+			"args": [],
+			"env": {
+				"SKIP_PROMPTS": "1",
+				"QUIET": "0"
+			},
+			"terminalKind": "integrated",
+			"showDebugOutput": true,
+			"trace": true
+		}
+	]
+}

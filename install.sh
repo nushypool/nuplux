@@ -2,6 +2,17 @@
 # nuplux one-command installer (Ubuntu/WSL-friendly)
 set -e
 
+echo "Starting nuplux installer..." >&2
+
+# Save whether we're interactive BEFORE any stdin manipulation
+IS_INTERACTIVE=0
+[ -t 0 ] && [ -t 1 ] && IS_INTERACTIVE=1
+
+# Fix stdin for debugger compatibility only if already broken
+if [ ! -t 0 ]; then
+  exec 0</dev/null 2>/dev/null || true
+fi
+
 APP_NAME="nuplux"
 CONF_DIR="$HOME/.config/$APP_NAME"
 ENABLE_FLAG="$CONF_DIR/enabled"
@@ -10,7 +21,6 @@ AUTO_BEGIN="# >>> ${APP_NAME} autostart >>>"
 AUTO_END="# <<< ${APP_NAME} autostart <<<"
 
 SCRIPTS_DIR="$CONF_DIR/scripts"
-PLUGINS_DIR="$CONF_DIR/plugins"
 CACHE_DIR="$HOME/.cache/$APP_NAME"
 
 THEME_FILE="$CONF_DIR/theme.conf"
@@ -20,12 +30,65 @@ TMUX_SESSION="main"
 
 # Quiet by default (set QUIET=0 to see logs)
 QUIET="${QUIET:-1}"
-log() { [ "$QUIET" -eq 0 ] && printf '%s\n' "$*"; }
-info() { printf '%s\n' "$*"; }
+log() { [ "$QUIET" -eq 0 ] && printf '%s\n' "$*" >&2; }
+info() { printf '%s\n' "$*" >&2; }
 
 need_cmd() { command -v "$1" >/dev/null 2>&1; }
 
-mkdir -p "$CONF_DIR" "$SCRIPTS_DIR" "$PLUGINS_DIR" "$LOCAL_BIN" "$CACHE_DIR"
+download() {
+  local url="$1" dest="$2"
+  if need_cmd curl; then
+    curl -fsSL "$url" -o "$dest"
+  elif need_cmd wget; then
+    wget -qO "$dest" "$url"
+  else
+    info "ERROR: need curl or wget to download $url"
+    exit 1
+  fi
+}
+
+echo "Setting up paths..." >&2
+
+SCRIPT_PATH="${BASH_SOURCE[0]:-$0}"
+SCRIPT_DIR=""
+[ -f "$SCRIPT_PATH" ] && SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" 2>/dev/null && pwd || pwd)"
+
+echo "Script dir: $SCRIPT_DIR" >&2
+
+LOCAL_ASSETS_DIR="${SCRIPT_DIR:+$SCRIPT_DIR/files}"
+REMOTE_ASSETS_URL="${NUX_ASSETS_URL:-https://raw.githubusercontent.com/nushypool/nuplux/main/files}"
+USE_LOCAL_ASSETS=0
+
+if [ -n "$LOCAL_ASSETS_DIR" ] && [ -f "$LOCAL_ASSETS_DIR/config/theme.conf" ]; then
+  USE_LOCAL_ASSETS=1
+fi
+
+asset_source_desc="$REMOTE_ASSETS_URL"
+[ "$USE_LOCAL_ASSETS" -eq 1 ] && asset_source_desc="$LOCAL_ASSETS_DIR"
+echo "Using assets from: $asset_source_desc" >&2
+
+fetch_asset() {
+  local rel="$1" dest="$2"
+  mkdir -p "$(dirname "$dest")"
+
+  if [ "$USE_LOCAL_ASSETS" -eq 1 ]; then
+    cp "$LOCAL_ASSETS_DIR/$rel" "$dest"
+  else
+    download "$REMOTE_ASSETS_URL/$rel" "$dest"
+  fi
+}
+
+fetch_exec() {
+  local rel="$1" dest="$2"
+  fetch_asset "$rel" "$dest"
+  chmod +x "$dest"
+}
+
+echo "Creating directories..." >&2
+
+mkdir -p "$CONF_DIR" "$SCRIPTS_DIR" "$LOCAL_BIN" "$CACHE_DIR"
+
+echo "Checking dependencies..." >&2
 
 # ---- Dependencies
 if ! need_cmd tmux; then
@@ -43,558 +106,54 @@ if ! need_cmd tmux; then
   fi
 fi
 
-# ---- Default theme file (colors) - DO NOT overwrite if user already customized it
+echo "Installing config files..." >&2
+
+# ---- Install config + scripts from repo assets
+# Theme: Do not overwrite if user already customized it
 if [ ! -f "$THEME_FILE" ]; then
-  cat > "$THEME_FILE" <<'EOF'
-# Nuplux theme settings (bash syntax).
-# Edit this file and then run: nuplux
-# (or inside tmux press F5 to reload config, then re-run nuplux if you want to re-render)
-
-# ---- Pane borders (Byobu-like "thick" effect uses background too)
-# Used in tmux: pane-border-style / pane-active-border-style
-NUX_PANE_BORDER_FG="colour39"          # border line (blue)
-NUX_PANE_BORDER_BG="colour17"          # border background (dark blue) => optical thickness
-NUX_PANE_ACTIVE_BORDER_FG="colour39"   # keep active border line blue
-NUX_PANE_ACTIVE_BORDER_BG="colour19"   # active border background
-
-# ---- Status bar base
-# Used in tmux: status-style
-NUX_STATUS_BG="colour235"
-NUX_STATUS_FG="colour250"
-
-# ---- Status-left
-# Used in tmux: status-left format
-NUX_LEFT_HOST_BG="colour254"
-NUX_LEFT_HOST_FG="colour16"
-NUX_LEFT_SESS_BG="colour240"
-NUX_LEFT_SESS_FG="colour231"
-
-# ---- Tabs (window list)
-# Used in tmux: window-status-format / window-status-current-format
-NUX_TAB_BG="colour235"
-NUX_TAB_FG="colour244"
-NUX_TAB_ACTIVE_BG="colour31"
-NUX_TAB_ACTIVE_FG="colour117"
-NUX_TAB_ACTIVE_EDGE_FG="colour31"
-
-# ---- Status-right blocks
-# Used in tmux: status-right format blocks
-NUX_RIGHT_APT_BG="colour245"
-NUX_RIGHT_APT_FG="colour231"
-
-NUX_RIGHT_UP_BG="colour237"
-NUX_RIGHT_UP_FG="colour248"
-
-NUX_RIGHT_SYS_BG="colour239"
-NUX_RIGHT_SYS_FG="colour250"
-
-NUX_RIGHT_LOAD_BG="colour240"
-NUX_RIGHT_LOAD_FG="colour231"
-
-NUX_RIGHT_DISK_BG="colour241"
-NUX_RIGHT_DISK_FG="colour231"
-
-NUX_RIGHT_BAT_BG="colour242"
-NUX_RIGHT_BAT_FG="colour231"
-
-NUX_RIGHT_NET_BG="colour33"
-NUX_RIGHT_NET_FG="colour231"
-
-NUX_RIGHT_DATE_BG="colour254"
-NUX_RIGHT_DATE_FG="colour16"
-
-NUX_RIGHT_TIME_BG="colour231"
-NUX_RIGHT_TIME_FG="colour16"
-
-# ---- Messages
-# Used in tmux: message-style
-NUX_MSG_BG="colour31"
-NUX_MSG_FG="colour231"
-
-# ---- tmux-cpu plugin colors (named)
-NUX_CPU_LOW="#[fg=green]"
-NUX_CPU_MED="#[fg=yellow]"
-NUX_CPU_HIGH="#[fg=red]"
-EOF
+  fetch_asset "config/theme.conf" "$THEME_FILE"
 fi
 
-# ---- Tmux config template (with @VARS@ to be replaced)
-cat > "$TMUX_TEMPLATE" <<'EOF'
-# Nuplux tmux configuration (generated)
-# DO NOT EDIT ~/.config/nuplux/tmux.conf directly.
-# Edit: ~/.config/nuplux/theme.conf
+fetch_asset "config/tmux.conf.template" "$TMUX_TEMPLATE"
+fetch_exec "config/scripts/win-paste.sh" "$SCRIPTS_DIR/win-paste.sh"
+fetch_exec "config/scripts/copy-to-clipboard.sh" "$SCRIPTS_DIR/copy-to-clipboard.sh"
+fetch_exec "config/scripts/reconnect-agents.sh" "$SCRIPTS_DIR/reconnect-agents.sh"
+fetch_exec "config/scripts/apt-updates.sh" "$SCRIPTS_DIR/apt-updates.sh"
+fetch_exec "config/scripts/disk.sh" "$SCRIPTS_DIR/disk.sh"
+fetch_exec "config/scripts/netspeed.sh" "$SCRIPTS_DIR/netspeed.sh"
+fetch_exec "config/scripts/battery.sh" "$SCRIPTS_DIR/battery.sh"
+fetch_exec "config/scripts/uptime.sh" "$SCRIPTS_DIR/uptime.sh"
+fetch_exec "config/scripts/cpu_percentage.sh" "$SCRIPTS_DIR/cpu_percentage.sh"
+fetch_exec "config/scripts/ram_percentage.sh" "$SCRIPTS_DIR/ram_percentage.sh"
 
-set -g default-terminal "screen-256color"
-set -g history-limit 50000
+fetch_exec "bin/nuplux" "$LOCAL_BIN/nuplux"
+fetch_exec "bin/nuplux-enable" "$LOCAL_BIN/nuplux-enable"
+fetch_exec "bin/nuplux-disable" "$LOCAL_BIN/nuplux-disable"
 
-# Enable mouse only in WSL (PowerShell available); disable on remote SSH for reliable client-side paste.
-if-shell -b 'command -v powershell.exe >/dev/null 2>&1' 'set -g mouse on' 'set -g mouse off'
+# ---- Generate tmux.conf from template before installing plugins
+echo "Generating tmux configuration..." >&2
 
-# Helps with timing/escape parsing and avoids stray terminal replies on some clients.
-set -sg escape-time 50
-set -g detach-on-destroy off
-
-# Border lines: single (avoid double-line gap)
-run-shell -b 'tmux set-option -g pane-border-lines single 2>/dev/null || true'
-
-# Byobu-like "thicker" borders (optical): fg + bg
-set -g pane-border-style fg=@NUX_PANE_BORDER_FG@,bg=@NUX_PANE_BORDER_BG@
-set -g pane-active-border-style fg=@NUX_PANE_ACTIVE_BORDER_FG@,bg=@NUX_PANE_ACTIVE_BORDER_BG@
-
-# Paste bindings only when Windows clipboard is available (WSL)
-if-shell -b 'command -v powershell.exe >/dev/null 2>&1' \
-  'unbind -n MouseDown3Pane; bind-key -n MouseDown3Pane run-shell -b "~/.config/nuplux/scripts/win-paste.sh | tmux load-buffer - && tmux paste-buffer"' \
-  'unbind -n MouseDown3Pane'
-
-if-shell -b 'command -v powershell.exe >/dev/null 2>&1' \
-  'bind-key -n C-v run-shell -b "~/.config/nuplux/scripts/win-paste.sh | tmux load-buffer - && tmux paste-buffer"; bind-key -n S-Insert run-shell -b "~/.config/nuplux/scripts/win-paste.sh | tmux load-buffer - && tmux paste-buffer"' \
-  'unbind -n C-v; unbind -n S-Insert'
-
-# Status bar
-set -g status on
-set -g status-position bottom
-set -g status-interval 2
-run-shell -b "~/.config/nuplux/scripts/apt-updates.sh >/dev/null 2>&1 || true"
-
-set -g status-style bg=@NUX_STATUS_BG@,fg=@NUX_STATUS_FG@
-set -g status-left-length 30
-set -g status-right-length 250
-
-set -g status-left "#[fg=@NUX_LEFT_HOST_FG@,bg=@NUX_LEFT_HOST_BG@,bold] #h #[fg=@NUX_LEFT_HOST_BG@,bg=@NUX_LEFT_SESS_BG@]#[fg=@NUX_LEFT_SESS_FG@,bg=@NUX_LEFT_SESS_BG@] #S #[fg=@NUX_LEFT_SESS_BG@,bg=@NUX_STATUS_BG@]"
-
-set -g status-right "#[fg=@NUX_RIGHT_APT_FG@,bg=@NUX_RIGHT_APT_BG@] APT:#(~/.config/nuplux/scripts/apt-updates.sh) #[fg=@NUX_RIGHT_UP_FG@,bg=@NUX_RIGHT_UP_BG@] Up:#(~/.config/nuplux/scripts/uptime.sh) #[fg=@NUX_RIGHT_SYS_FG@,bg=@NUX_RIGHT_SYS_BG@] CPU:#{cpu_percentage} RAM:#{ram_percentage} #[fg=@NUX_RIGHT_LOAD_FG@,bg=@NUX_RIGHT_LOAD_BG@] Load:#(cat /proc/loadavg|awk '{print $1}') #[fg=@NUX_RIGHT_DISK_FG@,bg=@NUX_RIGHT_DISK_BG@] Disk:#(~/.config/nuplux/scripts/disk.sh) #[fg=@NUX_RIGHT_BAT_FG@,bg=@NUX_RIGHT_BAT_BG@] #(~/.config/nuplux/scripts/battery.sh) #[fg=@NUX_RIGHT_NET_FG@,bg=@NUX_RIGHT_NET_BG@] Net:#(~/.config/nuplux/scripts/netspeed.sh) #[fg=@NUX_RIGHT_DATE_FG@,bg=@NUX_RIGHT_DATE_BG@] %d-%b #[fg=@NUX_RIGHT_TIME_FG@,bg=@NUX_RIGHT_TIME_BG@,bold] %H:%M:%S "
-
-# Tabs
-setw -g window-status-separator ""
-setw -g window-status-format "#[fg=@NUX_TAB_FG@,bg=@NUX_TAB_BG@] #I:#W#F "
-setw -g window-status-current-format "#[fg=@NUX_TAB_BG@,bg=@NUX_TAB_ACTIVE_BG@]#[fg=@NUX_TAB_ACTIVE_FG@,bg=@NUX_TAB_ACTIVE_BG@] #I:#W#F #[fg=@NUX_TAB_ACTIVE_EDGE_FG@,bg=@NUX_TAB_BG@]"
-
-# Indices
-set -g base-index 1
-setw -g pane-base-index 1
-set -g renumber-windows on
-
-# Messages
-set -g message-style bg=@NUX_MSG_BG@,fg=@NUX_MSG_FG@,bold
-
-# ===================== KEYBINDINGS =====================
-
-bind-key -n F2 new-window -c "#{pane_current_path}"
-bind-key -n F3 previous-window
-bind-key -n F4 next-window
-bind-key -n F5 source-file "~/.config/nuplux/tmux.conf" \; display-message "Reloaded!"
-bind-key -n F6 detach-client
-bind-key -n S-F6 detach-client
-bind-key -n F7 copy-mode
-bind-key -n F8 command-prompt -p "(rename '#W')" "rename-window '%%'"
-bind-key -n F12 lock-client
-
-bind-key -n S-F2 split-window -v -c "#{pane_current_path}"
-bind-key -n C-F2 split-window -h -c "#{pane_current_path}"
-bind-key -n S-F3 select-pane -t :.-
-bind-key -n S-F4 select-pane -t :.+
-bind-key -n S-F5 kill-pane -a
-bind-key -n C-F6 kill-pane
-bind-key -n C-F5 run-shell -b "~/.config/nuplux/scripts/reconnect-agents.sh"
-
-bind -n M-PageUp   copy-mode -e \; send -X page-up
-bind -n M-PageDown copy-mode -e \; send -X page-down
-bind -n M-Up       copy-mode -e \; send -X cursor-up
-bind -n M-Down     copy-mode -e \; send -X cursor-down
-
-bind-key -n S-Left  select-pane -L
-bind-key -n S-Right select-pane -R
-bind-key -n S-Up    select-pane -U
-bind-key -n S-Down  select-pane -D
-
-# Smaller resize steps
-bind-key -n M-S-Left  resize-pane -L 2
-bind-key -n M-S-Right resize-pane -R 2
-bind-key -n M-S-Up    resize-pane -U 1
-bind-key -n M-S-Down  resize-pane -D 1
-
-# Copy mode (VI)
-setw -g mode-keys vi
-bind-key -T copy-mode-vi 'v' send -X begin-selection
-bind-key -T copy-mode-vi 'y' send -X copy-pipe-and-cancel "~/.config/nuplux/scripts/copy-to-clipboard.sh"
-bind-key -T copy-mode-vi Enter send -X copy-pipe-and-cancel "~/.config/nuplux/scripts/copy-to-clipboard.sh"
-bind-key -T copy-mode-vi MouseDragEnd1Pane send -X copy-pipe-and-cancel "~/.config/nuplux/scripts/copy-to-clipboard.sh"
-
-# Ctrl+C: copy only in copy-mode; normal Ctrl+C otherwise
-bind-key -T copy-mode-vi C-c send-keys -X copy-pipe-and-cancel "~/.config/nuplux/scripts/copy-to-clipboard.sh"
-bind-key -T copy-mode    C-c send-keys -X copy-pipe-and-cancel "~/.config/nuplux/scripts/copy-to-clipboard.sh"
-
-# OSC52 clipboard support
-set -g set-clipboard on
-set -ga terminal-overrides ',*:Ms=\E]52;c;%p2%s\007'
-
-bind | split-window -h -c "#{pane_current_path}"
-bind - split-window -v -c "#{pane_current_path}"
-
-# ==================== PLUGINS ====================
-set -g @plugin 'tmux-plugins/tpm'
-set -g @plugin 'tmux-plugins/tmux-sensible'
-set -g @plugin 'tmux-plugins/tmux-resurrect'
-set -g @plugin 'tmux-plugins/tmux-continuum'
-set -g @plugin 'tmux-plugins/tmux-cpu'
-set -g @plugin 'tmux-plugins/tmux-yank'
-set -g @plugin 'tmux-plugins/tmux-open'
-set -g @plugin 'tmux-plugins/tmux-prefix-highlight'
-
-# CPU plugin colors (named)
-set -g @cpu_low_fg_color "@NUX_CPU_LOW@"
-set -g @cpu_medium_fg_color "@NUX_CPU_MED@"
-set -g @cpu_high_fg_color "@NUX_CPU_HIGH@"
-
-run "~/.config/nuplux/plugins/tpm/tpm"
-EOF
-
-# ---- Windows clipboard paste helper (no trailing newline; UTF-8 safe)
-cat > "$SCRIPTS_DIR/win-paste.sh" <<'EOF'
-#!/usr/bin/env bash
-set -e
-
-# Paste from Windows/System clipboard WITHOUT adding trailing newline.
-# UTF-8 safe (fixes Cyrillic in WSL<->PowerShell).
-# Keeps internal newlines; strips only CR and final LF.
-
-if command -v powershell.exe >/dev/null 2>&1; then
-  powershell.exe -NoProfile -Command "\
-    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); \
-    \$t = Get-Clipboard -Raw; \
-    if (\$null -ne \$t) { [Console]::Out.Write(\$t) }" \
-  | tr -d '\r' | sed -z 's/\n$//'
-  exit 0
+# Simple theme variable replacement (inline, no nuplux command needed)
+if [ -f "$THEME_FILE" ] && [ -f "$TMUX_TEMPLATE" ]; then
+  # Read theme variables and apply them to template
+  cp "$TMUX_TEMPLATE" "$TMUX_CONF"
+  
+  # Apply theme substitutions if theme.conf exists
+  while IFS='=' read -r key value; do
+    # Skip comments and empty lines
+    [[ "$key" =~ ^#.*$ ]] && continue
+    [[ -z "$key" ]] && continue
+    
+    # Remove leading/trailing whitespace
+    key=$(echo "$key" | xargs)
+    value=$(echo "$value" | xargs)
+    
+    # Replace @NUX_KEY@ with value in tmux.conf
+    sed -i "s|@${key}@|${value}|g" "$TMUX_CONF"
+  done < "$THEME_FILE"
 fi
 
-if command -v xclip >/dev/null 2>&1; then
-  xclip -selection clipboard -o 2>/dev/null | tr -d '\r' | sed -z 's/\n$//'
-  exit 0
-fi
-
-if command -v xsel >/dev/null 2>&1; then
-  xsel --clipboard --output 2>/dev/null | tr -d '\r' | sed -z 's/\n$//'
-  exit 0
-fi
-
-exit 0
-EOF
-chmod +x "$SCRIPTS_DIR/win-paste.sh"
-
-# ---- Copy helper (OSC52 for remote; PowerShell for local WSL; UTF-8 safe)
-cat > "$SCRIPTS_DIR/copy-to-clipboard.sh" <<'EOF'
-#!/usr/bin/env bash
-set -e
-buf="$(cat)"
-
-# Local WSL -> Windows clipboard via PowerShell: force UTF-8 input/output
-if command -v powershell.exe >/dev/null 2>&1 && [ -z "${SSH_CLIENT:-}" ] && [ -z "${SSH_TTY:-}" ]; then
-  printf "%s" "$buf" | powershell.exe -NoProfile -Command "\
-    [Console]::InputEncoding  = [System.Text.UTF8Encoding]::new(); \
-    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); \
-    \$text = [Console]::In.ReadToEnd(); \
-    Set-Clipboard -Value \$text"
-  exit 0
-fi
-
-# Remote -> local clipboard via OSC52 (terminal must support OSC52)
-buflen=$(printf "%s" "$buf" | wc -c)
-maxlen=74994
-if [ "$buflen" -gt "$maxlen" ]; then
-  echo "Clipboard: selection too long to copy" >&2
-  exit 1
-fi
-
-encoded=$(printf "%s" "$buf" | base64 | tr -d '\n')
-tty=${SSH_TTY:-$(tmux display-message -p '#{client_tty}' 2>/dev/null || true)}
-
-if [ -n "${tty:-}" ]; then
-  printf "\033]52;c;%s\a" "$encoded" > "$tty"
-else
-  printf "\033]52;c;%s\a" "$encoded"
-fi
-EOF
-chmod +x "$SCRIPTS_DIR/copy-to-clipboard.sh"
-
-# ---- Reconnect GPG/SSH agent sockets (Ctrl+F5)
-cat > "$SCRIPTS_DIR/reconnect-agents.sh" <<'EOF'
-#!/usr/bin/env bash
-set -e
-have() { command -v "$1" >/dev/null 2>&1; }
-
-msg=""
-if have gpgconf; then
-  gpg_sock="$(gpgconf --list-dirs agent-socket 2>/dev/null || true)"
-  gpg_ssh_sock="$(gpgconf --list-dirs agent-ssh-socket 2>/dev/null || true)"
-
-  if [ -n "${gpg_sock:-}" ]; then
-    tmux set-environment -g GPG_AGENT_INFO "" 2>/dev/null || true
-    tmux set-environment -g GPG_TTY "" 2>/dev/null || true
-    tmux set-environment -g GPG_AGENT_SOCK "$gpg_sock" 2>/dev/null || true
-    msg="gpg ok"
-  fi
-
-  if [ -n "${gpg_ssh_sock:-}" ]; then
-    tmux set-environment -g SSH_AUTH_SOCK "$gpg_ssh_sock" 2>/dev/null || true
-    if [ -n "$msg" ]; then msg="$msg, ssh->gpg"; else msg="ssh->gpg"; fi
-  fi
-fi
-
-[ -n "${msg:-}" ] || msg="agents refreshed"
-tmux display-message "Ctrl+F5: $msg"
-EOF
-chmod +x "$SCRIPTS_DIR/reconnect-agents.sh"
-
-# ---- APT updates count (cached)
-cat > "$SCRIPTS_DIR/apt-updates.sh" <<EOF
-#!/usr/bin/env bash
-set -e
-
-CACHE_DIR="$CACHE_DIR"
-CACHE_FILE="\$CACHE_DIR/apt-updates.count"
-TS_FILE="\$CACHE_DIR/apt-updates.ts"
-
-TTL_MIN=10
-TTL_SEC=\$((TTL_MIN * 60))
-
-mkdir -p "\$CACHE_DIR"
-now=\$(date +%s)
-
-if [ -f "\$CACHE_FILE" ] && [ -f "\$TS_FILE" ]; then
-  last=\$(cat "\$TS_FILE" 2>/dev/null || echo 0)
-  if [ \$((now - last)) -lt "\$TTL_SEC" ]; then
-    cat "\$CACHE_FILE"
-    exit 0
-  fi
-fi
-
-count="0"
-if [ -x /usr/lib/update-notifier/apt-check ]; then
-  out="\$(/usr/lib/update-notifier/apt-check 2>/dev/null || true)"   # "<updates>;<security>"
-  n="\${out%%;*}"
-  n="\${n//[^0-9]/}"
-  count="\${n:-0}"
-elif command -v apt >/dev/null 2>&1; then
-  count="\$(LC_ALL=C apt list --upgradable 2>/dev/null | awk 'NR>1{c++} END{print c+0}')"
-fi
-
-printf "%s" "\$count" > "\$CACHE_FILE"
-printf "%s" "\$now" > "\$TS_FILE"
-printf "%s" "\$count"
-EOF
-chmod +x "$SCRIPTS_DIR/apt-updates.sh"
-
-# ---- Disk usage helper
-cat > "$SCRIPTS_DIR/disk.sh" <<'EOF'
-#!/usr/bin/env bash
-df -h / | awk 'NR==2 {printf "%s/%s (%s)", $3, $2, $5}'
-EOF
-chmod +x "$SCRIPTS_DIR/disk.sh"
-
-# ---- Network speed (cached)
-cat > "$SCRIPTS_DIR/netspeed.sh" <<EOF
-#!/usr/bin/env bash
-set -e
-
-CACHE_DIR="$CACHE_DIR"
-CACHE_FILE="\$CACHE_DIR/netspeed.txt"
-TS_FILE="\$CACHE_DIR/netspeed.ts"
-
-TTL_SEC=2
-
-mkdir -p "\$CACHE_DIR"
-now=\$(date +%s)
-
-if [ -f "\$CACHE_FILE" ] && [ -f "\$TS_FILE" ]; then
-  last=\$(cat "\$TS_FILE" 2>/dev/null || echo 0)
-  if [ \$((now - last)) -lt "\$TTL_SEC" ]; then
-    cat "\$CACHE_FILE"
-    exit 0
-  fi
-fi
-
-iface=\$(ip route 2>/dev/null | awk '/default/ {print \$5; exit}')
-if [ -z "\$iface" ]; then
-  out="No net"
-  printf "%s" "\$out" > "\$CACHE_FILE"
-  printf "%s" "\$now" > "\$TS_FILE"
-  printf "%s" "\$out"
-  exit 0
-fi
-
-rx1=\$(cat /sys/class/net/"\$iface"/statistics/rx_bytes 2>/dev/null || echo 0)
-tx1=\$(cat /sys/class/net/"\$iface"/statistics/tx_bytes 2>/dev/null || echo 0)
-sleep 1
-rx2=\$(cat /sys/class/net/"\$iface"/statistics/rx_bytes 2>/dev/null || echo 0)
-tx2=\$(cat /sys/class/net/"\$iface"/statistics/tx_bytes 2>/dev/null || echo 0)
-
-rx=\$(( (rx2 - rx1) / 1024 ))
-tx=\$(( (tx2 - tx1) / 1024 ))
-
-out="↓\${rx}K ↑\${tx}K"
-printf "%s" "\$out" > "\$CACHE_FILE"
-printf "%s" "\$now" > "\$TS_FILE"
-printf "%s" "\$out"
-EOF
-chmod +x "$SCRIPTS_DIR/netspeed.sh"
-
-# ---- Battery helper (optional)
-cat > "$SCRIPTS_DIR/battery.sh" <<'EOF'
-#!/usr/bin/env bash
-for b in /sys/class/power_supply/BAT*; do
-  [ -d "$b" ] || continue
-  cap=$(cat "$b/capacity" 2>/dev/null || echo "")
-  stat=$(cat "$b/status" 2>/dev/null || echo "")
-  [ -n "$cap" ] || continue
-  icon="🔋"
-  [ "$stat" = "Charging" ] && icon="⚡"
-  echo "${icon}${cap}%"
-  exit 0
-done
-exit 0
-EOF
-chmod +x "$SCRIPTS_DIR/battery.sh"
-
-# ---- Uptime helper
-cat > "$SCRIPTS_DIR/uptime.sh" <<'EOF'
-#!/usr/bin/env bash
-uptime | awk '{print $(NF-2)}' | sed 's/,//'
-EOF
-chmod +x "$SCRIPTS_DIR/uptime.sh"
-
-# ---- Install TPM into $CONF_DIR (no ~/.tmux/plugins)
-if [ ! -d "$PLUGINS_DIR/tpm" ]; then
-  if need_cmd git; then
-    git clone -q https://github.com/tmux-plugins/tpm "$PLUGINS_DIR/tpm" >/dev/null 2>&1 || true
-  fi
-fi
-
-# ---- nuplux command (renders tmux.conf from theme + template, then starts/attaches)
-cat > "$LOCAL_BIN/nuplux" <<'EOF'
-#!/usr/bin/env bash
-set -e
-
-APP_NAME="nuplux"
-CONF_DIR="$HOME/.config/$APP_NAME"
-THEME_FILE="$CONF_DIR/theme.conf"
-TMUX_TEMPLATE="$CONF_DIR/tmux.conf.template"
-TMUX_CONF="$CONF_DIR/tmux.conf"
-TMUX_SESSION="main"
-
-# Load theme
-if [ -f "$THEME_FILE" ]; then
-  # shellcheck disable=SC1090
-  . "$THEME_FILE"
-fi
-
-# Defaults (if someone deletes vars)
-: "${NUX_PANE_BORDER_FG:=colour39}"
-: "${NUX_PANE_BORDER_BG:=colour17}"
-: "${NUX_PANE_ACTIVE_BORDER_FG:=colour39}"
-: "${NUX_PANE_ACTIVE_BORDER_BG:=colour19}"
-: "${NUX_STATUS_BG:=colour235}"
-: "${NUX_STATUS_FG:=colour250}"
-: "${NUX_LEFT_HOST_BG:=colour254}"
-: "${NUX_LEFT_HOST_FG:=colour16}"
-: "${NUX_LEFT_SESS_BG:=colour240}"
-: "${NUX_LEFT_SESS_FG:=colour231}"
-: "${NUX_TAB_BG:=colour235}"
-: "${NUX_TAB_FG:=colour244}"
-: "${NUX_TAB_ACTIVE_BG:=colour31}"
-: "${NUX_TAB_ACTIVE_FG:=colour117}"
-: "${NUX_TAB_ACTIVE_EDGE_FG:=colour31}"
-: "${NUX_RIGHT_APT_BG:=colour245}"
-: "${NUX_RIGHT_APT_FG:=colour231}"
-: "${NUX_RIGHT_UP_BG:=colour237}"
-: "${NUX_RIGHT_UP_FG:=colour248}"
-: "${NUX_RIGHT_SYS_BG:=colour239}"
-: "${NUX_RIGHT_SYS_FG:=colour250}"
-: "${NUX_RIGHT_LOAD_BG:=colour240}"
-: "${NUX_RIGHT_LOAD_FG:=colour231}"
-: "${NUX_RIGHT_DISK_BG:=colour241}"
-: "${NUX_RIGHT_DISK_FG:=colour231}"
-: "${NUX_RIGHT_BAT_BG:=colour242}"
-: "${NUX_RIGHT_BAT_FG:=colour231}"
-: "${NUX_RIGHT_NET_BG:=colour33}"
-: "${NUX_RIGHT_NET_FG:=colour231}"
-: "${NUX_RIGHT_DATE_BG:=colour254}"
-: "${NUX_RIGHT_DATE_FG:=colour16}"
-: "${NUX_RIGHT_TIME_BG:=colour231}"
-: "${NUX_RIGHT_TIME_FG:=colour16}"
-: "${NUX_MSG_BG:=colour31}"
-: "${NUX_MSG_FG:=colour231}"
-: "${NUX_CPU_LOW:=#[fg=green]}"
-: "${NUX_CPU_MED:=#[fg=yellow]}"
-: "${NUX_CPU_HIGH:=#[fg=red]}"
-
-render() {
-  sed \
-    -e "s|@NUX_PANE_BORDER_FG@|${NUX_PANE_BORDER_FG}|g" \
-    -e "s|@NUX_PANE_BORDER_BG@|${NUX_PANE_BORDER_BG}|g" \
-    -e "s|@NUX_PANE_ACTIVE_BORDER_FG@|${NUX_PANE_ACTIVE_BORDER_FG}|g" \
-    -e "s|@NUX_PANE_ACTIVE_BORDER_BG@|${NUX_PANE_ACTIVE_BORDER_BG}|g" \
-    -e "s|@NUX_STATUS_BG@|${NUX_STATUS_BG}|g" \
-    -e "s|@NUX_STATUS_FG@|${NUX_STATUS_FG}|g" \
-    -e "s|@NUX_LEFT_HOST_BG@|${NUX_LEFT_HOST_BG}|g" \
-    -e "s|@NUX_LEFT_HOST_FG@|${NUX_LEFT_HOST_FG}|g" \
-    -e "s|@NUX_LEFT_SESS_BG@|${NUX_LEFT_SESS_BG}|g" \
-    -e "s|@NUX_LEFT_SESS_FG@|${NUX_LEFT_SESS_FG}|g" \
-    -e "s|@NUX_TAB_BG@|${NUX_TAB_BG}|g" \
-    -e "s|@NUX_TAB_FG@|${NUX_TAB_FG}|g" \
-    -e "s|@NUX_TAB_ACTIVE_BG@|${NUX_TAB_ACTIVE_BG}|g" \
-    -e "s|@NUX_TAB_ACTIVE_FG@|${NUX_TAB_ACTIVE_FG}|g" \
-    -e "s|@NUX_TAB_ACTIVE_EDGE_FG@|${NUX_TAB_ACTIVE_EDGE_FG}|g" \
-    -e "s|@NUX_RIGHT_APT_BG@|${NUX_RIGHT_APT_BG}|g" \
-    -e "s|@NUX_RIGHT_APT_FG@|${NUX_RIGHT_APT_FG}|g" \
-    -e "s|@NUX_RIGHT_UP_BG@|${NUX_RIGHT_UP_BG}|g" \
-    -e "s|@NUX_RIGHT_UP_FG@|${NUX_RIGHT_UP_FG}|g" \
-    -e "s|@NUX_RIGHT_SYS_BG@|${NUX_RIGHT_SYS_BG}|g" \
-    -e "s|@NUX_RIGHT_SYS_FG@|${NUX_RIGHT_SYS_FG}|g" \
-    -e "s|@NUX_RIGHT_LOAD_BG@|${NUX_RIGHT_LOAD_BG}|g" \
-    -e "s|@NUX_RIGHT_LOAD_FG@|${NUX_RIGHT_LOAD_FG}|g" \
-    -e "s|@NUX_RIGHT_DISK_BG@|${NUX_RIGHT_DISK_BG}|g" \
-    -e "s|@NUX_RIGHT_DISK_FG@|${NUX_RIGHT_DISK_FG}|g" \
-    -e "s|@NUX_RIGHT_BAT_BG@|${NUX_RIGHT_BAT_BG}|g" \
-    -e "s|@NUX_RIGHT_BAT_FG@|${NUX_RIGHT_BAT_FG}|g" \
-    -e "s|@NUX_RIGHT_NET_BG@|${NUX_RIGHT_NET_BG}|g" \
-    -e "s|@NUX_RIGHT_NET_FG@|${NUX_RIGHT_NET_FG}|g" \
-    -e "s|@NUX_RIGHT_DATE_BG@|${NUX_RIGHT_DATE_BG}|g" \
-    -e "s|@NUX_RIGHT_DATE_FG@|${NUX_RIGHT_DATE_FG}|g" \
-    -e "s|@NUX_RIGHT_TIME_BG@|${NUX_RIGHT_TIME_BG}|g" \
-    -e "s|@NUX_RIGHT_TIME_FG@|${NUX_RIGHT_TIME_FG}|g" \
-    -e "s|@NUX_MSG_BG@|${NUX_MSG_BG}|g" \
-    -e "s|@NUX_MSG_FG@|${NUX_MSG_FG}|g" \
-    -e "s|@NUX_CPU_LOW@|${NUX_CPU_LOW}|g" \
-    -e "s|@NUX_CPU_MED@|${NUX_CPU_MED}|g" \
-    -e "s|@NUX_CPU_HIGH@|${NUX_CPU_HIGH}|g"
-}
-
-if [ -f "$TMUX_TEMPLATE" ]; then
-  render < "$TMUX_TEMPLATE" > "$TMUX_CONF"
-fi
-
-exec tmux -f "$TMUX_CONF" new-session -A -s "$TMUX_SESSION"
-EOF
-chmod +x "$LOCAL_BIN/nuplux"
-
-# ---- enable/disable autostart
-cat > "$LOCAL_BIN/nuplux-enable" <<EOF
-#!/usr/bin/env bash
-set -e
-mkdir -p "$CONF_DIR"
-: > "$ENABLE_FLAG"
-echo "nuplux autostart: ENABLED"
-echo "Open a new terminal tab/window."
-EOF
-chmod +x "$LOCAL_BIN/nuplux-enable"
-
-cat > "$LOCAL_BIN/nuplux-disable" <<EOF
-#!/usr/bin/env bash
-set -e
-rm -f "$ENABLE_FLAG" 2>/dev/null || true
-echo "nuplux autostart: DISABLED"
-EOF
-chmod +x "$LOCAL_BIN/nuplux-disable"
+echo "Configuring bashrc..." >&2
 
 # ---- Bashrc integration (managed block)
 touch "$HOME/.bashrc"
@@ -638,43 +197,44 @@ EOF
 
 # ---- Friendly final message + optional start
 
-# Colors (auto-disable when not a TTY)
+# Colors (only use if output is to a terminal)
 if [ -t 1 ]; then
-  C_CYAN=$'\033[36m'
-  C_GREEN=$'\033[32m'
-  C_BOLD=$'\033[1m'
-  C_RESET=$'\033[0m'
+  CYAN='\033[36m'
+  GREEN='\033[32m'
+  BOLD='\033[1m'
+  RESET='\033[0m'
 else
-  C_CYAN=""; C_GREEN=""; C_BOLD=""; C_RESET=""
+  CYAN=''
+  GREEN=''
+  BOLD=''
+  RESET=''
 fi
 
-cyan()  { info "${C_CYAN}${C_BOLD}$*${C_RESET}"; }
-green() { info "${C_GREEN}$*${C_RESET}"; }
+echo "" >&2
+echo -e "${CYAN}${BOLD}================================================================${RESET}" >&2
+echo -e "${CYAN}${BOLD}                Nuplux is ready to use! 🎉${RESET}" >&2
+echo -e "${CYAN}${BOLD}================================================================${RESET}" >&2
+echo "" >&2
+echo "Nuplux turns tmux into a Byobu-like workspace:" >&2
+echo "  • modern status bar (updates, CPU/RAM, net speed, time)" >&2
+echo "  • clipboard helpers (WSL + OSC52 for SSH)" >&2
+echo "  • persistent session: you can close the terminal and keep working later" >&2
+echo "" >&2
+echo "Where things live:" >&2
+echo "  • Config:  $TMUX_CONF" >&2
+echo "  • Theme:   $THEME_FILE" >&2
+echo "  • Home:    $CONF_DIR" >&2
+echo "" >&2
+echo -e "${GREEN}Next steps:${RESET}" >&2
+echo -e "${GREEN}  • Start now:         nuplux${RESET}" >&2
+echo -e "${GREEN}  • Enable autostart:  nuplux-enable${RESET}" >&2
+echo -e "${GREEN}  • Disable autostart: nuplux-disable${RESET}" >&2
+echo "" >&2
 
-info ""
-cyan "                Nuplux is ready to use! 🎉"
-cyan "****************************************************************"
-info ""
-info "Nuplux turns tmux into a Byobu-like workspace:"
-info "  • modern status bar (updates, CPU/RAM, net speed, time)"
-info "  • clipboard helpers (WSL + OSC52 for SSH)"
-info "  • persistent session: you can close the terminal and keep working later"
-info ""
-info "Where things live:"
-info "  • Config:  $TMUX_CONF"
-info "  • Theme:   $THEME_FILE"
-info "  • Home:    $CONF_DIR"
-info ""
-green "Next steps:"
-green "  • Start now:         nuplux"
-green "  • Enable autostart:  nuplux-enable"
-green "  • Disable autostart: nuplux-disable"
-info ""
-
-# Ask reload .bashrc (default: No) just before asking to start
-if [ -t 0 ] && [ -t 1 ]; then
-  read -r -p "Reload ~/.bashrc now? [y/N] " _ans
-  _ans="${_ans:-n}"
+# Ask reload .bashrc (default: Yes) just before asking to start (interactive only)
+if [ "$IS_INTERACTIVE" -eq 1 ]; then
+  read -r -p "Reload ~/.bashrc now? [Y/n] " _ans
+  _ans="${_ans:-y}"
   if [[ "$_ans" =~ ^[Yy]$ ]]; then
     # shellcheck disable=SC1090
     . "$HOME/.bashrc"
@@ -682,7 +242,7 @@ if [ -t 0 ] && [ -t 1 ]; then
 fi
 
 # Ask to start nuplux now (interactive only)
-if [ -t 0 ] && [ -t 1 ]; then
+if [ "$IS_INTERACTIVE" -eq 1 ]; then
   read -r -p "Start Nuplux now? [Y/n] " _start
   _start="${_start:-Y}"
   if [[ "$_start" =~ ^[Yy]$ ]]; then
@@ -690,9 +250,18 @@ if [ -t 0 ] && [ -t 1 ]; then
       tmux source-file "$TMUX_CONF"
       tmux display-message "Reloaded: $TMUX_CONF"
     else
+      # Start tmux in background briefly to let plugins initialize
+      tmux -f "$TMUX_CONF" new-session -d -s "init_session" 2>/dev/null || true
+      sleep 1
+      # Source plugins explicitly
+      tmux -f "$TMUX_CONF" run-shell "~/.config/nuplux/plugins/tpm/scripts/source_plugins.sh" 2>/dev/null || true
+      sleep 1
+      # Kill the init session
+      tmux kill-session -t "init_session" 2>/dev/null || true
+      # Now start normally
       "$LOCAL_BIN/nuplux"
     fi
   else
-    info "No problem — you can run 'nuplux' anytime."
+    echo "No problem — you can run 'nuplux' anytime." >&2
   fi
 fi

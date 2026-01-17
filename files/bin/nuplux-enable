@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -e
+APP_NAME="nuplux"
+CONF_DIR="$HOME/.config/$APP_NAME"
+ENABLE_FLAG="$CONF_DIR/enabled"
+mkdir -p "$CONF_DIR"
+: > "$ENABLE_FLAG"
+echo "nuplux autostart: ENABLED"
+echo "Open a new terminal tab/window."

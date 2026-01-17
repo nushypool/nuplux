@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -e
+APP_NAME="nuplux"
+CONF_DIR="$HOME/.config/$APP_NAME"
+ENABLE_FLAG="$CONF_DIR/enabled"
+rm -f "$ENABLE_FLAG" 2>/dev/null || true
+echo "nuplux autostart: DISABLED"
