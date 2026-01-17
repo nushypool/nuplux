@@ -6,12 +6,14 @@ echo "Starting nuplux installer..." >&2
 
 # Save whether we're interactive BEFORE any stdin manipulation
 IS_INTERACTIVE=0
-[ -t 0 ] && [ -t 1 ] && IS_INTERACTIVE=1
+if [ -t 0 ] && [ -t 1 ]; then
+  IS_INTERACTIVE=1
+fi
 
 # If stdin isn't a TTY (e.g. curl | bash), don't block on reads
-if [ ! -t 0 ]; then
-  exec </dev/null
-fi
+# if [ ! -t 0 ]; then
+#   exec </dev/null
+# fi
 
 APP_NAME="nuplux"
 CONF_DIR="$HOME/.config/$APP_NAME"
