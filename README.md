@@ -110,5 +110,5 @@ Copy mode (vi):
 
 ## Uninstall
 ```bash
-- rm -rf ~/.config/nuplux/ && rm -rf ~/.local/bin/nuplux* && rm -rf ~/.cache/nuplux/
+rm -rf ~/.config/nuplux/ && rm -rf ~/.local/bin/nuplux* && rm -rf ~/.cache/nuplux/
 ```
