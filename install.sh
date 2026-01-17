@@ -235,6 +235,7 @@ echo "" >&2
 if [ "$IS_INTERACTIVE" -eq 1 ]; then
   read -r -p "Reload ~/.bashrc now? [Y/n] " _ans
   _ans="${_ans:-y}"
+  printf 'Answer: %s\n' "$_ans" >&2
   if [[ "$_ans" =~ ^[Yy]$ ]]; then
     # shellcheck disable=SC1090
     . "$HOME/.bashrc"
@@ -265,3 +266,5 @@ if [ "$IS_INTERACTIVE" -eq 1 ]; then
     echo "No problem — you can run 'nuplux' anytime." >&2
   fi
 fi
+
+exit 0
