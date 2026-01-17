@@ -246,24 +246,13 @@ fi
 if [ "$IS_INTERACTIVE" -eq 1 ]; then
   read -r -p "Start Nuplux now? [Y/n] " _start < "$TTY_IN"
   _start="${_start:-y}"
+  printf 'Answer: %s\n' "$_start"
   if [[ "$_start" =~ ^[Yy]$ ]]; then
-    if [ -n "${TMUX:-}" ]; then
-      tmux source-file "$TMUX_CONF"
-      tmux display-message "Reloaded: $TMUX_CONF"
+    if [ -t 0 ] && [ -t 1 ]; then
+      nuplux
     else
-      # Start tmux in background briefly to let plugins initialize
-      tmux -f "$TMUX_CONF" new-session -d -s "init_session" 2>/dev/null || true
-      sleep 1
-      # Source plugins explicitly
-      tmux -f "$TMUX_CONF" run-shell "~/.config/nuplux/plugins/tpm/scripts/source_plugins.sh" 2>/dev/null || true
-      sleep 1
-      # Kill the init session
-      tmux kill-session -t "init_session" 2>/dev/null || true
-      # Now start normally
-      "$LOCAL_BIN/nuplux"
+      echo "Not a terminal session; run 'nuplux' manually in your terminal." >&2
     fi
-  else
-    echo "No problem — you can run 'nuplux' anytime." >&2
   fi
 fi
 
