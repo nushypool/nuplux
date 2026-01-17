@@ -8,9 +8,9 @@ echo "Starting nuplux installer..." >&2
 IS_INTERACTIVE=0
 [ -t 0 ] && [ -t 1 ] && IS_INTERACTIVE=1
 
-# Fix stdin for debugger compatibility only if already broken
+# If stdin isn't a TTY (e.g. curl | bash), don't block on reads
 if [ ! -t 0 ]; then
-  exec 0</dev/null 2>/dev/null || true
+  exec </dev/null
 fi
 
 APP_NAME="nuplux"
