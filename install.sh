@@ -4,16 +4,14 @@ set -e
 
 echo "Starting nuplux installer..." >&2
 
-# Save whether we're interactive BEFORE any stdin manipulation
+# Detect whether we can interact with the user.
+# NOTE: when installed via 'curl | bash', stdin is the script itself,
+# so we must NOT redirect/consume fd 0. Use /dev/tty for prompts.
 IS_INTERACTIVE=0
-if [ -t 0 ] && [ -t 1 ]; then
+TTY_IN="/dev/tty"
+if [ -t 1 ] && [ -r "$TTY_IN" ]; then
   IS_INTERACTIVE=1
 fi
-
-# If stdin isn't a TTY (e.g. curl | bash), don't block on reads
-# if [ ! -t 0 ]; then
-#   exec </dev/null
-# fi
 
 APP_NAME="nuplux"
 CONF_DIR="$HOME/.config/$APP_NAME"
@@ -235,7 +233,7 @@ echo "" >&2
 
 # Ask reload .bashrc (default: Yes) just before asking to start (interactive only)
 if [ "$IS_INTERACTIVE" -eq 1 ]; then
-  read -r -p "Reload ~/.bashrc now? [Y/n] " _ans
+  read -r -p "Reload ~/.bashrc now? [Y/n] " _ans < "$TTY_IN"
   _ans="${_ans:-y}"
   printf 'Answer: %s\n' "$_ans" >&2
   if [[ "$_ans" =~ ^[Yy]$ ]]; then
@@ -246,8 +244,8 @@ fi
 
 # Ask to start nuplux now (interactive only)
 if [ "$IS_INTERACTIVE" -eq 1 ]; then
-  read -r -p "Start Nuplux now? [Y/n] " _start
-  _start="${_start:-Y}"
+  read -r -p "Start Nuplux now? [Y/n] " _start < "$TTY_IN"
+  _start="${_start:-y}"
   if [[ "$_start" =~ ^[Yy]$ ]]; then
     if [ -n "${TMUX:-}" ]; then
       tmux source-file "$TMUX_CONF"
