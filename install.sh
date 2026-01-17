@@ -235,25 +235,28 @@ echo "" >&2
 if [ "$IS_INTERACTIVE" -eq 1 ]; then
   read -r -p "Reload ~/.bashrc now? [Y/n] " _ans < "$TTY_IN"
   _ans="${_ans:-y}"
-  printf 'Answer: %s\n' "$_ans" >&2
   if [[ "$_ans" =~ ^[Yy]$ ]]; then
     # shellcheck disable=SC1090
     . "$HOME/.bashrc"
   fi
 fi
 
-# Ask to start nuplux now (interactive only)
+# --- Start Nuplux now? (only when we have a real terminal) ---
 if [ "$IS_INTERACTIVE" -eq 1 ]; then
-  read -r -p "Start Nuplux now? [Y/n] " _start < "$TTY_IN"
+  _start=""
+  if [ -r "$TTY_IN" ]; then
+    read -r -p "Start Nuplux now? [Y/n] " _start < "$TTY_IN" || _start=""
+  fi
   _start="${_start:-y}"
-  printf 'Answer: %s\n' "$_start"
+
   if [[ "$_start" =~ ^[Yy]$ ]]; then
     if [ -t 0 ] && [ -t 1 ]; then
       nuplux
     else
-      echo "Not a terminal session; run 'nuplux' manually in your terminal." >&2
+      echo "Not a terminal session; run: nuplux" >&2
     fi
   fi
 fi
+
 
 exit 0
