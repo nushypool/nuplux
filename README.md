@@ -9,13 +9,7 @@ Nuplux installs a tmux configuration that feels like Byobu: familiar keybindings
 ## Install (one command)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nushypool/nuplux/main/install.sh | bash
-```
-
-Optional: verbose installer logs
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/nushypool/nuplux/main/install.sh | QUIET=0 bash
+curl -fsSL -o install.sh https://raw.githubusercontent.com/nushypool/nuplux/main/install.sh && bash install.sh
 ```
 
 ---
