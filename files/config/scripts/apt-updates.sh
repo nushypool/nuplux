@@ -21,7 +21,7 @@ fi
 
 count="0"
 if [ -x /usr/lib/update-notifier/apt-check ]; then
-  out=$(/usr/lib/update-notifier/apt-check 2>/dev/null || true)   # "<updates>;<security>"
+  out=$(/usr/lib/update-notifier/apt-check 2>/dev/null || true)
   n="${out%%;*}"
   n="${n//[^0-9]/}"
   count="${n:-0}"
