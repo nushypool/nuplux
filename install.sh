@@ -85,7 +85,7 @@ fetch_exec() {
 }
 
 echo "Creating directories..." >&2
-
+rm -rf "$CACHE_DIR"
 mkdir -p "$CONF_DIR" "$SCRIPTS_DIR" "$LOCAL_BIN" "$CACHE_DIR"
 
 echo "Checking dependencies..." >&2
