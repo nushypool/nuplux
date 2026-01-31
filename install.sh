@@ -179,7 +179,10 @@ if [ -f "$ENABLE_FLAG" ]; then
   alias nuplux="\$HOME/.local/bin/nuplux"
   case "\$-" in
     *i*)
-      if command -v tmux >/dev/null 2>&1 && [ -z "\${TMUX:-}" ]; then
+      # Skip autostart in VSCode integrated terminal sessions.
+      if [ -n "\${VSCODE_IPC_HOOK_CLI:-}" ] || [ "\${TERM_PROGRAM:-}" = "vscode" ]; then
+        : 
+      elif command -v tmux >/dev/null 2>&1 && [ -z "\${TMUX:-}" ]; then
         case "\${TERM:-}" in
           dumb) : ;;
           *)
